@@ -456,43 +456,6 @@ function App() {
                 )}
               </div>
             </div>
-          )}(artist => artist.name).join(', ')} • {track.album?.name}
-                      </p>
-                      <p className="text-gray-500 text-xs">
-                        {track.popularity}% popularity • {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
-                        onClick={() => setSelectedTrack({ 
-                          id: track.id, 
-                          uri: track.uri, 
-                          name: track.name,
-                          artists: track.artists 
-                        })}
-                        disabled={!sdkReady}
-                      >
-                        {sdkReady ? 'Visualize' : 'Loading...'}
-                      </button>
-                      <a
-                        href={track.external_urls?.spotify}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm transition-colors"
-                      >
-                        Play in Spotify
-                      </a>
-                    </div>
-                  </div>
-                ))}
-                {searchResults.length === 0 && !loading && (
-                  <div className="text-center py-8 text-gray-400">
-                    No results found. Try a different search term.
-                  </div>
-                )}
-              </div>
-            </div>
           )}
           
           {selectedTrack && sdkReady && (
