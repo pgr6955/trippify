@@ -134,14 +134,69 @@ function App() {
     { value: '3d', label: '3D Trippy Mode' }
   ];
 
-  // Simple Visualizer Component (inline to avoid import issues)
-  const SimpleVisualizer = ({ trackUri, onClose }) => {
+  // Simple Visualizer Component with Spotify Integration
+  const SimpleVisualizer = ({ trackUri, visualType, token, onClose }) => {
     const canvasRef = React.useRef(null);
     const animationRef = React.useRef(null);
+    const playerRef = React.useRef(null);
+    const deviceIdRef = React.useRef(null);
     
+    const [isPlaying, setIsPlaying] = React.useState(false);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [playerReady, setPlayerReady] = React.useState(false);
+    const [currentTrack, setCurrentTrack] = React.useState(null);
+    const [volume, setVolumeState] = React.useState(50);
+    const [playerError, setPlayerError] = React.useState(null);
+    
+    // Initialize Spotify Player
     React.useEffect(() => {
-      console.log('🎵 Starting simple visualization...');
+      const setupPlayer = async () => {
+        try {
+          console.log('🎵 Setting up Spotify player...');
+          
+          if (!window.Spotify) {
+            throw new Error('Spotify Web Playback SDK not loaded');
+          }
+
+          const { initializePlayer, playTrack, pausePlayback, resumePlayback, setVolume } = await import('./utils/spotify');
+          
+          const { player, device_id } = await initializePlayer(
+            token,
+            (deviceId) => {
+              console.log('✅ Player ready with device ID:', deviceId);
+              deviceIdRef.current = deviceId;
+              setPlayerReady(true);
+              setIsLoading(false);
+            },
+            (state) => {
+              console.log('🎵 Player state changed:', state);
+              if (state) {
+                setIsPlaying(!state.paused);
+                setCurrentTrack(state.track_window.current_track);
+              }
+            }
+          );
+
+          playerRef.current = player;
+          
+        } catch (err) {
+          console.error('❌ Failed to setup player:', err);
+          setPlayerError(err.message);
+          setIsLoading(false);
+        }
+      };
+
+      setupPlayer();
       
+      return () => {
+        if (playerRef.current) {
+          playerRef.current.disconnect();
+        }
+      };
+    }, [token]);
+    
+    // Animation
+    React.useEffect(() => {
       if (!canvasRef.current) return;
       
       const canvas = canvasRef.current;
@@ -158,10 +213,14 @@ function App() {
         const barWidth = canvas.width / barCount;
         
         for (let i = 0; i < barCount; i++) {
-          const height = Math.sin(time * 0.02 + i * 0.3) * 100 + 150;
+          // Make animation more reactive when playing
+          const speed = isPlaying ? 0.05 : 0.01;
+          const intensity = isPlaying ? 150 : 50;
+          
+          const height = Math.sin(time * speed + i * 0.3) * intensity + 100;
           const hue = (i * 5 + time) % 360;
           
-          ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+          ctx.fillStyle = `hsl(${hue}, 100%, ${isPlaying ? 50 : 30}%)`;
           ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 1, height);
         }
         
@@ -175,10 +234,82 @@ function App() {
           cancelAnimationFrame(animationRef.current);
         }
       };
-    }, []);
+    }, [isPlaying]);
+
+    const handlePlayPause = async () => {
+      try {
+        if (!playerReady || !deviceIdRef.current) {
+          throw new Error('Player not ready');
+        }
+
+        const { playTrack, pausePlayback, resumePlayback } = await import('./utils/spotify');
+
+        if (isPlaying) {
+          console.log('🎵 Pausing...');
+          await pausePlayback(token);
+        } else {
+          if (trackUri) {
+            console.log('🎵 Playing track:', trackUri);
+            await playTrack(token, deviceIdRef.current, trackUri);
+          } else {
+            console.log('🎵 Resuming...');
+            await resumePlayback(token);
+          }
+        }
+      } catch (err) {
+        console.error('❌ Playback error:', err);
+        setPlayerError(err.message);
+      }
+    };
+
+    const handleVolumeChange = async (newVolume) => {
+      try {
+        setVolumeState(newVolume);
+        if (playerRef.current) {
+          await playerRef.current.setVolume(newVolume / 100);
+        }
+        
+        const { setVolume } = await import('./utils/spotify');
+        await setVolume(token, newVolume);
+      } catch (err) {
+        console.error('Volume change error:', err);
+      }
+    };
+
+    if (isLoading) {
+      return (
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+          <div className="text-white text-center">
+            <div className="text-xl mb-2">Loading Spotify Player...</div>
+            <div className="text-sm text-gray-400">Make sure you have Spotify Premium</div>
+          </div>
+        </div>
+      );
+    }
+
+    if (playerError) {
+      return (
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+          <div className="text-white text-center max-w-md p-4">
+            <div className="text-xl mb-4 text-red-400">Player Error</div>
+            <div className="text-sm mb-4">{playerError}</div>
+            <div className="text-xs text-gray-400 mb-4">
+              Make sure you have Spotify Premium and no other Spotify instances are playing
+            </div>
+            <button
+              onClick={onClose}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        {/* Header */}
         <div className="flex justify-between items-center p-4 bg-gray-900">
           <h2 className="text-white text-xl">🎵 Music Visualizer</h2>
           <button
@@ -189,17 +320,93 @@ function App() {
           </button>
         </div>
 
+        {/* Main Visualization */}
         <div className="flex-1 flex items-center justify-center p-4">
           <canvas
             ref={canvasRef}
-            width={800}
-            height={400}
-            className="border border-gray-600 rounded"
+            width={1000}
+            height={500}
+            className="border border-gray-600 rounded max-w-full max-h-full"
           />
         </div>
 
-        <div className="p-4 bg-gray-900 text-center">
-          <p className="text-white">Playing: {trackUri || 'No track'}</p>
+        {/* Controls */}
+        <div className="bg-gray-900 p-4">
+          {/* Track Info */}
+          {currentTrack && (
+            <div className="flex items-center gap-4 mb-4">
+              {currentTrack.album?.images?.[0] && (
+                <img 
+                  src={currentTrack.album.images[0].url} 
+                  alt={currentTrack.album.name}
+                  className="w-12 h-12 rounded"
+                />
+              )}
+              <div>
+                <h3 className="text-white font-semibold">{currentTrack.name}</h3>
+                <p className="text-gray-400 text-sm">
+                  {currentTrack.artists.map(artist => artist.name).join(', ')}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* Play/Pause */}
+              <button
+                onClick={handlePlayPause}
+                disabled={!playerReady}
+                className={`w-12 h-12 rounded-full flex items-center justify-center text-xl ${
+                  !playerReady
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : isPlaying 
+                    ? 'bg-red-500 hover:bg-red-600' 
+                    : 'bg-green-500 hover:bg-green-600'
+                } text-white transition-colors`}
+              >
+                {!playerReady ? '...' : isPlaying ? '⏸' : '▶'}
+              </button>
+
+              {/* Visual Type */}
+              <select
+                value={visualType}
+                onChange={(e) => setVisualType(e.target.value)}
+                className="bg-gray-800 text-white px-3 py-2 rounded border border-gray-600"
+              >
+                <option value="bars">Audio Bars</option>
+                <option value="spirals">Spirals</option>
+                <option value="waveform">Waveform</option>
+                <option value="3d">3D Trippy</option>
+              </select>
+            </div>
+
+            {/* Volume */}
+            <div className="flex items-center gap-3">
+              <span className="text-white">🔊</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                className="w-32"
+              />
+              <span className="text-white text-sm w-8">{volume}%</span>
+            </div>
+          </div>
+
+          {/* Status */}
+          <div className="mt-2 text-center">
+            <p className="text-gray-400 text-sm">
+              {playerReady ? (
+                trackUri ? 'Ready to play' : 'No track selected'
+              ) : (
+                'Connecting to Spotify...'
+              )}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -414,6 +621,8 @@ function App() {
           {selectedTrack && (
             <SimpleVisualizer 
               trackUri={selectedTrack.uri}
+              visualType={visualType}
+              token={token}
               onClose={() => {
                 console.log('🎨 Closing visualizer');
                 setSelectedTrack(null);
