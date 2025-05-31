@@ -1,12 +1,10 @@
 // src/utils/spotify.js
 
 export function loginWithSpotify() {
+  console.log('🚀 loginWithSpotify() called!');
+  
   const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
   const redirectUri = import.meta.env.VITE_REDIRECT_URI;
-  
-  console.log('🔍 Debug info:');
-  console.log('clientId:', clientId);
-  console.log('redirectUri:', redirectUri);
   
   const scopes = [
     'user-read-private',
@@ -18,7 +16,6 @@ export function loginWithSpotify() {
     'user-modify-playback-state'
   ];
 
-  // Try the most basic approach
   const baseUrl = 'https://accounts.spotify.com/authorize';
   const params = new URLSearchParams({
     client_id: clientId,
@@ -26,15 +23,30 @@ export function loginWithSpotify() {
     response_type: 'token',
     scope: scopes.join(' ')
   });
-
-  const fullUrl = baseUrl + '?' + params.toString();
   
-  console.log('🌐 Base URL:', baseUrl);
-  console.log('📝 Params:', params.toString());
-  console.log('🔗 Full URL:', fullUrl);
-  console.log('🚀 About to redirect to:', fullUrl);
+  const fullUrl = `${baseUrl}?${params.toString()}`;
+  console.log('🔗 Complete URL:', fullUrl);
   
-  window.location.href = fullUrl;
+  // Try multiple redirect methods
+  try {
+    // Method 1: Force same tab
+    window.location.replace(fullUrl);
+  } catch (error) {
+    console.log('Method 1 failed, trying method 2');
+    try {
+      // Method 2: New tab approach
+      window.open(fullUrl, '_self');
+    } catch (error2) {
+      console.log('Method 2 failed, trying method 3');
+      // Method 3: Manual link click simulation
+      const link = document.createElement('a');
+      link.href = fullUrl;
+      link.target = '_self';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }
 }
 
 export async function getPlaylists(token) {
