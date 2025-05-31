@@ -1,8 +1,16 @@
 {
+  "functions": {},
   "rewrites": [
-    { 
-      "source": "/(?!.*\\.(js|css|png|jpg|jpeg|gif|ico|svg)$).*",
-      "destination": "/index.html"
+    {
+      "source": "/(.*)",
+      "destination": "/index.html",
+      "has": [
+        {
+          "type": "header",
+          "key": "host",
+          "value": "trippify-git-main-pgr6955s-projects.vercel.app"
+        }
+      ]
     }
   ]
 }
