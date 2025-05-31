@@ -3,6 +3,7 @@
 export function loginWithSpotify() {
   const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
   const redirectUri = import.meta.env.VITE_REDIRECT_URI;
+
   const scopes = [
     'user-read-private',
     'user-read-email',
@@ -16,8 +17,10 @@ export function loginWithSpotify() {
   const authUrl = new URL('https://accounts.spotify.com/authorize');
   authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', redirectUri);
-  authUrl.searchParams.set('response_type', 'token'); // ✅ this is the fix
+  authUrl.searchParams.set('response_type', 'token'); // ✅ important!
   authUrl.searchParams.set('scope', scopes.join(' '));
+
+  console.log('Redirecting to:', authUrl.toString()); // 🔍 use this to debug
 
   window.location.href = authUrl.toString();
 }
