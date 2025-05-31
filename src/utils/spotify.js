@@ -2,8 +2,9 @@
 
 export function loginWithSpotify() {
   const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
-  const redirectUri = import.meta.env.VITE_REDIRECT_URI;
-
+  // Dynamic redirect URI based on environment
+  const redirectUri = import.meta.env.VITE_REDIRECT_URI || window.location.origin + '/';
+  
   const scopes = [
     'user-read-private',
     'user-read-email',
