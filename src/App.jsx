@@ -244,10 +244,10 @@ function App() {
                       <img 
                         src={playlist.images[0].url} 
                         alt={playlist.name}
-                        className="w-full h-40 object-cover rounded mb-3"
+                        className="w-full h-32 object-cover rounded mb-3"
                       />
                     )}
-                    <h3 className="text-lg font-semibold mb-2">{playlist.name}</h3>
+                    <h3 className="text-lg font-semibold mb-2 truncate">{playlist.name}</h3>
                     <p className="text-gray-400 text-sm mb-3">{playlist.tracks?.total || 0} tracks</p>
                     <div className="flex gap-2">
                       <button
@@ -275,7 +275,7 @@ function App() {
           )}
 
           {currentView === 'tracks' && selectedPlaylist && (
-            <div className="w-full max-w-6xl">
+            <div className="w-full max-w-7xl">
               <div className="flex items-center gap-4 mb-6">
                 <button
                   onClick={goBackToPlaylists}
@@ -286,60 +286,86 @@ function App() {
                 <h2 className="text-2xl font-bold">{selectedPlaylist.name}</h2>
               </div>
               
-              <div className="space-y-2">
-                {playlistTracks.map((item, index) => {
-                  const track = item.track;
-                  if (!track) return null;
-                  
-                  return (
-                    <div 
-                      key={track.id || index} 
-                      className="bg-gray-800 p-3 rounded flex items-center gap-4 hover:bg-gray-700 transition-colors"
-                    >
-                      {track.album?.images && track.album.images[0] && (
-                        <img 
-                          src={track.album.images[0].url} 
-                          alt={track.album.name}
-                          className="w-12 h-12 rounded"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold truncate">{track.name}</h4>
-                        <p className="text-gray-400 text-sm truncate">
-                          {track.artists?.map(artist => artist.name).join(', ')} • {track.album?.name}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
-                          onClick={() => setSelectedTrack({ 
-                            id: track.id, 
-                            uri: track.uri, 
-                            name: track.name,
-                            artists: track.artists 
-                          })}
-                          disabled={!sdkReady}
+              <div className="bg-gray-800 rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-700">
+                    <tr>
+                      <th className="text-left p-3 w-12">#</th>
+                      <th className="text-left p-3 w-16">Cover</th>
+                      <th className="text-left p-3">Title</th>
+                      <th className="text-left p-3">Artist</th>
+                      <th className="text-left p-3">Album</th>
+                      <th className="text-left p-3 w-32">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {playlistTracks.map((item, index) => {
+                      const track = item.track;
+                      if (!track) return null;
+                      
+                      return (
+                        <tr 
+                          key={track.id || index} 
+                          className="border-t border-gray-700 hover:bg-gray-750 transition-colors"
                         >
-                          {sdkReady ? 'Visualize' : 'Loading...'}
-                        </button>
-                        <a
-                          href={track.external_urls?.spotify}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm transition-colors"
-                        >
-                          Play in Spotify
-                        </a>
-                      </div>
-                    </div>
-                  );
-                })}
+                          <td className="p-3 text-gray-400">{index + 1}</td>
+                          <td className="p-3">
+                            {track.album?.images && track.album.images[0] && (
+                              <img 
+                                src={track.album.images[0].url} 
+                                alt={track.album.name}
+                                className="w-10 h-10 rounded object-cover"
+                              />
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <div className="font-semibold text-white truncate max-w-xs">
+                              {track.name}
+                            </div>
+                          </td>
+                          <td className="p-3 text-gray-300 truncate max-w-xs">
+                            {track.artists?.map(artist => artist.name).join(', ')}
+                          </td>
+                          <td className="p-3 text-gray-400 truncate max-w-xs">
+                            {track.album?.name}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex gap-1">
+                              <button
+                                className="bg-purple-500 hover:bg-purple-600 px-2 py-1 rounded text-xs transition-colors"
+                                onClick={() => setSelectedTrack({ 
+                                  id: track.id, 
+                                  uri: track.uri, 
+                                  name: track.name,
+                                  artists: track.artists 
+                                })}
+                                disabled={!sdkReady}
+                                title="Visualize"
+                              >
+                                🎨
+                              </button>
+                              <a
+                                href={track.external_urls?.spotify}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="bg-green-600 hover:bg-green-500 px-2 py-1 rounded text-xs transition-colors"
+                                title="Play in Spotify"
+                              >
+                                ▶️
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
 
           {currentView === 'search' && (
-            <div className="w-full max-w-6xl">
+            <div className="w-full max-w-7xl">
               <div className="flex items-center gap-4 mb-6">
                 <button
                   onClick={goBackToPlaylists}
@@ -350,23 +376,87 @@ function App() {
                 <h2 className="text-2xl font-bold">Search Results for "{searchQuery}"</h2>
               </div>
               
-              <div className="space-y-2">
-                {searchResults.map((track, index) => (
-                  <div 
-                    key={track.id || index} 
-                    className="bg-gray-800 p-3 rounded flex items-center gap-4 hover:bg-gray-700 transition-colors"
-                  >
-                    {track.album?.images && track.album.images[0] && (
-                      <img 
-                        src={track.album.images[0].url} 
-                        alt={track.album.name}
-                        className="w-12 h-12 rounded"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold truncate">{track.name}</h4>
-                      <p className="text-gray-400 text-sm truncate">
-                        {track.artists?.map(artist => artist.name).join(', ')} • {track.album?.name}
+              <div className="bg-gray-800 rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-700">
+                    <tr>
+                      <th className="text-left p-3 w-12">#</th>
+                      <th className="text-left p-3 w-16">Cover</th>
+                      <th className="text-left p-3">Title</th>
+                      <th className="text-left p-3">Artist</th>
+                      <th className="text-left p-3">Album</th>
+                      <th className="text-left p-3 w-20">Duration</th>
+                      <th className="text-left p-3 w-32">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {searchResults.map((track, index) => (
+                      <tr 
+                        key={track.id || index} 
+                        className="border-t border-gray-700 hover:bg-gray-750 transition-colors"
+                      >
+                        <td className="p-3 text-gray-400">{index + 1}</td>
+                        <td className="p-3">
+                          {track.album?.images && track.album.images[0] && (
+                            <img 
+                              src={track.album.images[0].url} 
+                              alt={track.album.name}
+                              className="w-10 h-10 rounded object-cover"
+                            />
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <div className="font-semibold text-white truncate max-w-xs">
+                            {track.name}
+                          </div>
+                        </td>
+                        <td className="p-3 text-gray-300 truncate max-w-xs">
+                          {track.artists?.map(artist => artist.name).join(', ')}
+                        </td>
+                        <td className="p-3 text-gray-400 truncate max-w-xs">
+                          {track.album?.name}
+                        </td>
+                        <td className="p-3 text-gray-400 text-sm">
+                          {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex gap-1">
+                            <button
+                              className="bg-purple-500 hover:bg-purple-600 px-2 py-1 rounded text-xs transition-colors"
+                              onClick={() => setSelectedTrack({ 
+                                id: track.id, 
+                                uri: track.uri, 
+                                name: track.name,
+                                artists: track.artists 
+                              })}
+                              disabled={!sdkReady}
+                              title="Visualize"
+                            >
+                              🎨
+                            </button>
+                            <a
+                              href={track.external_urls?.spotify}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-green-600 hover:bg-green-500 px-2 py-1 rounded text-xs transition-colors"
+                              title="Play in Spotify"
+                            >
+                              ▶️
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {searchResults.length === 0 && !loading && (
+                  <div className="text-center py-8 text-gray-400">
+                    No results found. Try a different search term.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}(artist => artist.name).join(', ')} • {track.album?.name}
                       </p>
                       <p className="text-gray-500 text-xs">
                         {track.popularity}% popularity • {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
