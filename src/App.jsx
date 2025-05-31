@@ -495,6 +495,10 @@ function App() {
               trackUri={selectedTrack.uri}
               visualType={visualType} 
               token={token} 
+              onClose={() => {
+                console.log('🎨 Closing visualizer');
+                setSelectedTrack(null);
+              }}
             />
           )}
         </>
