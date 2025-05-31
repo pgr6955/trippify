@@ -137,29 +137,17 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
   const startVisualization = () => {
     console.log('🎨 Starting visualization...');
     
-    // Setup audio context for visualization if not already done
-    if (!audioContextRef.current) {
-      try {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        analyserRef.current = audioContextRef.current.createAnalyser();
-        analyserRef.current.fftSize = 256;
-        console.log('✅ Audio context created');
-      } catch (err) {
-        console.error('❌ Failed to create audio context:', err);
-        return;
-      }
-    }
-
-    if (!analyserRef.current || !canvasRef.current) {
-      console.error('❌ Missing analyzer or canvas');
+    if (!canvasRef.current) {
+      console.error('❌ Missing canvas');
       return;
     }
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    const bufferLength = analyserRef.current.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
+    
+    // Create a more realistic audio simulation
+    let time = 0;
+    
     console.log('🎨 Visualization setup complete, starting animation loop');
 
     const draw = () => {
@@ -170,12 +158,26 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
 
       animationRef.current = requestAnimationFrame(draw);
       
-      // Create some fake data for now since we can't access Spotify's audio stream directly
-      for (let i = 0; i < dataArray.length; i++) {
-        dataArray[i] = Math.random() * 255;
+      // Simulate audio data with more realistic patterns
+      const bufferLength = 128;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      // Create bass-heavy audio simulation
+      for (let i = 0; i < bufferLength; i++) {
+        const frequency = i / bufferLength;
+        const bassBoost = frequency < 0.1 ? 3 : 1;
+        const midBoost = frequency > 0.1 && frequency < 0.6 ? 1.5 : 1;
+        const trebleBoost = frequency > 0.8 ? 1.2 : 1;
+        
+        dataArray[i] = Math.max(0, Math.min(255, 
+          (Math.sin(time * 0.01 + i * 0.1) * 60 + 80) * bassBoost * midBoost * trebleBoost +
+          Math.random() * 40
+        ));
       }
       
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+      time += 1;
+      
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       switch (visualType) {
@@ -326,75 +328,90 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
   }
 
   return (
-    <div className="bg-black p-4 rounded">
-      {/* Debug Info */}
-      <div className="mb-4 p-3 bg-gray-800 rounded text-sm">
-        <div className="text-white font-bold mb-2">Debug Info:</div>
-        <div className="text-gray-300">
-          <div>Player Ready: {playerReady ? '✅' : '❌'}</div>
-          <div>Device ID: {deviceIdRef.current || 'Not set'}</div>
-          <div>Track URI: {trackUri || 'Not provided'}</div>
-          <div>SDK Available: {window.Spotify ? '✅' : '❌'}</div>
-          <div>Is Playing: {isPlaying ? '✅' : '❌'}</div>
+    <div className="fixed inset-0 bg-black flex flex-col">
+      {/* Main Visualization Area */}
+      <div className="flex-1 flex items-center justify-center p-4">
+        <canvas
+          ref={canvasRef}
+          width={1200}
+          height={600}
+          className="max-w-full max-h-full border border-gray-700 rounded-lg"
+          style={{ width: '100%', height: 'auto', maxHeight: '70vh' }}
+        />
+      </div>
+
+      {/* Bottom Controls Bar */}
+      <div className="bg-gray-900 border-t border-gray-700 p-4">
+        <div className="max-w-6xl mx-auto">
+          {/* Track Info */}
+          <div className="flex items-center gap-4 mb-4">
+            {currentTrack && (
+              <>
+                {currentTrack.album?.images?.[0] && (
+                  <img 
+                    src={currentTrack.album.images[0].url} 
+                    alt={currentTrack.album.name}
+                    className="w-16 h-16 rounded"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-white truncate">{currentTrack.name}</h3>
+                  <p className="text-gray-400 truncate">
+                    {currentTrack.artists.map(artist => artist.name).join(', ')}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Playback Controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* Play/Pause Button */}
+              <button
+                onClick={handlePlayPause}
+                disabled={!playerReady}
+                className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-semibold ${
+                  !playerReady
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : isPlaying 
+                    ? 'bg-red-500 hover:bg-red-600' 
+                    : 'bg-green-500 hover:bg-green-600'
+                } text-white transition-colors`}
+              >
+                {!playerReady ? '...' : isPlaying ? '⏸' : '▶'}
+              </button>
+
+              {/* Visual Type Selector */}
+              <select
+                value={visualType}
+                onChange={(e) => setVisualType(e.target.value)}
+                className="bg-gray-800 text-white px-3 py-2 rounded border border-gray-600"
+              >
+                <option value="bars">Audio Bars</option>
+                <option value="spirals">Spirals</option>
+                <option value="waveform">Waveform</option>
+                <option value="3d">3D Trippy</option>
+              </select>
+            </div>
+
+            {/* Volume Control */}
+            <div className="flex items-center gap-3">
+              <span className="text-white text-sm">🔊</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                className="w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+              />
+              <span className="text-white text-sm w-10">{volume}%</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="mb-4 flex items-center justify-between flex-wrap gap-4">
-        <div className="text-white flex-1 min-w-0">
-          {currentTrack ? (
-            <div>
-              <h3 className="font-bold truncate">{currentTrack.name}</h3>
-              <p className="text-gray-400 truncate">
-                {currentTrack.artists.map(artist => artist.name).join(', ')}
-              </p>
-            </div>
-          ) : (
-            <div>
-              <h3 className="font-bold">Ready to play</h3>
-              <p className="text-gray-400">Click play to start music</p>
-            </div>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-4">
-          {/* Volume Control */}
-          <div className="flex items-center gap-2 text-white">
-            <span className="text-sm">🔊</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={volume}
-              onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
-              className="w-20 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-            />
-            <span className="text-sm w-8">{volume}%</span>
-          </div>
-          
-          {/* Play/Pause Button */}
-          <button
-            onClick={handlePlayPause}
-            disabled={!playerReady}
-            className={`px-6 py-2 rounded font-semibold ${
-              !playerReady
-                ? 'bg-gray-500 cursor-not-allowed'
-                : isPlaying 
-                ? 'bg-red-500 hover:bg-red-600' 
-                : 'bg-green-500 hover:bg-green-600'
-            } text-white transition-colors`}
-          >
-            {!playerReady ? 'Loading...' : isPlaying ? '⏸ Pause' : '▶ Play'}
-          </button>
-        </div>
-      </div>
-      
-      <canvas
-        ref={canvasRef}
-        width={800}
-        height={400}
-        className="w-full h-96 bg-black border border-gray-700 rounded"
-      />
-      
       <style jsx>{`
         .slider::-webkit-slider-thumb {
           appearance: none;
