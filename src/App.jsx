@@ -496,30 +496,12 @@ function App() {
           )}
           
           {selectedTrack && sdkReady && (
-            <div className="mt-6 w-full">
-              <Suspense fallback={<div>Loading Visualizer...</div>}>
-                <LazyVisualizer 
-                  trackId={selectedTrack.id} 
-                  trackUri={selectedTrack.uri}
-                  visualType={visualType} 
-                  token={token} 
-                />
-              </Suspense>
-              <div className="flex gap-4 mt-2 justify-center">
-                <button 
-                  onClick={() => handleLike(selectedTrack.id)} 
-                  className="bg-pink-500 hover:bg-pink-600 px-4 py-1 rounded transition-colors"
-                >
-                  Like
-                </button>
-                <button 
-                  onClick={() => handleRadio(selectedTrack.id)} 
-                  className="bg-yellow-500 hover:bg-yellow-600 px-4 py-1 rounded transition-colors"
-                >
-                  Start Radio
-                </button>
-              </div>
-            </div>
+            <LazyVisualizer 
+              trackId={selectedTrack.id} 
+              trackUri={selectedTrack.uri}
+              visualType={visualType} 
+              token={token} 
+            />
           )}
         </>
       )}
