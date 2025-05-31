@@ -13,6 +13,25 @@ function App() {
   const [visualType, setVisualType] = useState('bars');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sdkReady, setSdkReady] = useState(false);
+
+  // Load Spotify Web Playback SDK
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://sdk.scdn.co/spotify-player.js";
+    script.async = true;
+    
+    document.body.appendChild(script);
+
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      console.log('✅ Spotify Web Playback SDK is ready');
+      setSdkReady(true);
+    };
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -244,9 +263,15 @@ function App() {
                       <div className="flex gap-2">
                         <button
                           className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
-                          onClick={() => setSelectedTrack(track.id)}
+                          onClick={() => setSelectedTrack({ 
+                            id: track.id, 
+                            uri: track.uri, 
+                            name: track.name,
+                            artists: track.artists 
+                          })}
+                          disabled={!sdkReady}
                         >
-                          Visualize
+                          {sdkReady ? 'Visualize' : 'Loading...'}
                         </button>
                         <a
                           href={track.external_urls?.spotify}
@@ -264,20 +289,25 @@ function App() {
             </div>
           )}
           
-          {selectedTrack && (
+          {selectedTrack && sdkReady && (
             <div className="mt-6 w-full">
               <Suspense fallback={<div>Loading Visualizer...</div>}>
-                <LazyVisualizer trackId={selectedTrack} visualType={visualType} token={token} />
+                <LazyVisualizer 
+                  trackId={selectedTrack.id} 
+                  trackUri={selectedTrack.uri}
+                  visualType={visualType} 
+                  token={token} 
+                />
               </Suspense>
               <div className="flex gap-4 mt-2 justify-center">
                 <button 
-                  onClick={() => handleLike(selectedTrack)} 
+                  onClick={() => handleLike(selectedTrack.id)} 
                   className="bg-pink-500 hover:bg-pink-600 px-4 py-1 rounded transition-colors"
                 >
                   Like
                 </button>
                 <button 
-                  onClick={() => handleRadio(selectedTrack)} 
+                  onClick={() => handleRadio(selectedTrack.id)} 
                   className="bg-yellow-500 hover:bg-yellow-600 px-4 py-1 rounded transition-colors"
                 >
                   Start Radio
