@@ -1,16 +1,8 @@
 {
-  "functions": {},
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html",
-      "has": [
-        {
-          "type": "header",
-          "key": "host",
-          "value": "trippify-git-main-pgr6955s-projects.vercel.app"
-        }
-      ]
+      "source": "/((?!api|_next|favicon\\.ico).*)",
+      "destination": "/index.html"
     }
   ]
 }
