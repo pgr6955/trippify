@@ -115,6 +115,20 @@ export async function getPlaylists(token) {
   return res.json();
 }
 
+export async function getPlaylistTracks(token, playlistId) {
+  const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  
+  if (!res.ok) {
+    throw new Error(`Failed to fetch playlist tracks: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
 export async function likeTrack(token, trackId) {
   const res = await fetch(`https://api.spotify.com/v1/me/tracks?ids=${trackId}`, {
     method: 'PUT',
@@ -126,6 +140,20 @@ export async function likeTrack(token, trackId) {
   if (!res.ok) {
     throw new Error(`Failed to like track: ${res.status}`);
   }
+}
+
+export async function getPlaylistTracks(token, playlistId) {
+  const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  
+  if (!res.ok) {
+    throw new Error(`Failed to fetch playlist tracks: ${res.status}`);
+  }
+  
+  return res.json();
 }
 
 export async function getRecommendations(token, trackId) {
