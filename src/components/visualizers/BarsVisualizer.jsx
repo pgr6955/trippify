@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import p5 from 'p5';
-import { useSpotifyPlayer } from '../../../hooks/useSpotifyPlayer';
+import { useSpotifyPlayer } from '../../hooks/useSpotifyPlayer';
 
 export default function BarsVisualizer({ trackId, token }) {
   const canvasRef = useRef();
