@@ -1,12 +1,14 @@
 // src/App.jsx
 import React, { useEffect, useState, Suspense, lazy } from 'react';
-import { loginWithSpotify, exchangeCodeForToken, getPlaylists, likeTrack, getRecommendations } from './utils/spotify';
+import { loginWithSpotify, exchangeCodeForToken, getPlaylists, getPlaylistTracks, likeTrack, getRecommendations } from './utils/spotify';
 
 const LazyVisualizer = lazy(() => import('./components/Visualizer'));
 
 function App() {
   const [token, setToken] = useState(null);
   const [playlists, setPlaylists] = useState([]);
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [playlistTracks, setPlaylistTracks] = useState([]);
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [visualType, setVisualType] = useState('bars');
   const [loading, setLoading] = useState(false);
@@ -63,6 +65,26 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchPlaylistTracks = async (playlistId, playlistName) => {
+    try {
+      setLoading(true);
+      const data = await getPlaylistTracks(token, playlistId);
+      setPlaylistTracks(data.items);
+      setSelectedPlaylist({ id: playlistId, name: playlistName });
+    } catch (err) {
+      console.error('❌ Failed to fetch playlist tracks:', err);
+      setError('Failed to load playlist tracks');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const goBackToPlaylists = () => {
+    setSelectedPlaylist(null);
+    setPlaylistTracks([]);
+    setSelectedTrack(null);
   };
 
   const handleLike = async (trackId) => {
@@ -145,23 +167,102 @@ function App() {
               ))}
             </select>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 w-full max-w-4xl">
-            {playlists.map(pl => (
-              <div key={pl.id} className="bg-gray-800 p-4 rounded">
-                <h2 className="text-xl font-semibold">{pl.name}</h2>
-                <p className="text-gray-400 text-sm">{pl.tracks?.total || 0} tracks</p>
-                {pl.tracks?.items?.length > 0 && (
-                  <button
-                    className="mt-2 bg-purple-500 hover:bg-purple-600 px-4 py-1 rounded transition-colors"
-                    onClick={() => setSelectedTrack(pl.tracks.items[0].track.id)}
-                  >
-                    Visualize
-                  </button>
-                )}
+
+          {/* Show playlists or tracks based on selection */}
+          {!selectedPlaylist ? (
+            /* Playlists View */
+            <div className="w-full max-w-4xl mt-6">
+              <h2 className="text-2xl font-bold mb-4">Your Playlists</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {playlists.map(playlist => (
+                  <div key={playlist.id} className="bg-gray-800 p-4 rounded hover:bg-gray-700 transition-colors">
+                    {playlist.images && playlist.images[0] && (
+                      <img 
+                        src={playlist.images[0].url} 
+                        alt={playlist.name}
+                        className="w-full h-40 object-cover rounded mb-3"
+                      />
+                    )}
+                    <h3 className="text-lg font-semibold mb-2">{playlist.name}</h3>
+                    <p className="text-gray-400 text-sm mb-3">{playlist.tracks?.total || 0} tracks</p>
+                    <div className="flex gap-2">
+                      <button
+                        className="bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm transition-colors"
+                        onClick={() => fetchPlaylistTracks(playlist.id, playlist.name)}
+                      >
+                        View Tracks
+                      </button>
+                      <a
+                        href={playlist.external_urls.spotify}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded text-sm transition-colors"
+                      >
+                        Open in Spotify
+                      </a>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            /* Tracks View */
+            <div className="w-full max-w-6xl mt-6">
+              <div className="flex items-center gap-4 mb-6">
+                <button
+                  onClick={goBackToPlaylists}
+                  className="bg-gray-600 hover:bg-gray-500 px-3 py-2 rounded transition-colors"
+                >
+                  ← Back to Playlists
+                </button>
+                <h2 className="text-2xl font-bold">{selectedPlaylist.name}</h2>
+              </div>
+              
+              <div className="space-y-2">
+                {playlistTracks.map((item, index) => {
+                  const track = item.track;
+                  if (!track) return null;
+                  
+                  return (
+                    <div 
+                      key={track.id || index} 
+                      className="bg-gray-800 p-3 rounded flex items-center gap-4 hover:bg-gray-700 transition-colors"
+                    >
+                      {track.album?.images && track.album.images[0] && (
+                        <img 
+                          src={track.album.images[0].url} 
+                          alt={track.album.name}
+                          className="w-12 h-12 rounded"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold truncate">{track.name}</h4>
+                        <p className="text-gray-400 text-sm truncate">
+                          {track.artists?.map(artist => artist.name).join(', ')} • {track.album?.name}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
+                          onClick={() => setSelectedTrack(track.id)}
+                        >
+                          Visualize
+                        </button>
+                        <a
+                          href={track.external_urls?.spotify}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm transition-colors"
+                        >
+                          Play in Spotify
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           
           {selectedTrack && (
             <div className="mt-6 w-full">
