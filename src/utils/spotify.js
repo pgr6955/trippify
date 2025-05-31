@@ -13,7 +13,7 @@ export function loginWithSpotify() {
     'user-modify-playback-state'
   ];
 
-  // Use URLSearchParams for more reliable URL building
+  // Build URL manually instead of using new URL()
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
