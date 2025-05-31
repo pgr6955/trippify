@@ -333,12 +333,21 @@ function App() {
                             <div className="flex gap-1">
                               <button
                                 className="bg-purple-500 hover:bg-purple-600 px-2 py-1 rounded text-xs transition-colors"
-                                onClick={() => setSelectedTrack({ 
-                                  id: track.id, 
-                                  uri: track.uri, 
-                                  name: track.name,
-                                  artists: track.artists 
-                                })}
+                                onClick={() => {
+                                  console.log('🎨 Visualize button clicked for track:', track.name);
+                                  setSelectedTrack({ 
+                                    id: track.id, 
+                                    uri: track.uri, 
+                                    name: track.name,
+                                    artists: track.artists 
+                                  });
+                                  console.log('🎨 Selected track set:', { 
+                                    id: track.id, 
+                                    uri: track.uri, 
+                                    name: track.name,
+                                    artists: track.artists 
+                                  });
+                                }}
                                 disabled={!sdkReady}
                                 title="Visualize"
                               >
@@ -423,12 +432,21 @@ function App() {
                           <div className="flex gap-1">
                             <button
                               className="bg-purple-500 hover:bg-purple-600 px-2 py-1 rounded text-xs transition-colors"
-                              onClick={() => setSelectedTrack({ 
-                                id: track.id, 
-                                uri: track.uri, 
-                                name: track.name,
-                                artists: track.artists 
-                              })}
+                              onClick={() => {
+                                console.log('🎨 Search Visualize button clicked for track:', track.name);
+                                setSelectedTrack({ 
+                                  id: track.id, 
+                                  uri: track.uri, 
+                                  name: track.name,
+                                  artists: track.artists 
+                                });
+                                console.log('🎨 Search Selected track set:', { 
+                                  id: track.id, 
+                                  uri: track.uri, 
+                                  name: track.name,
+                                  artists: track.artists 
+                                });
+                              }}
                               disabled={!sdkReady}
                               title="Visualize"
                             >
@@ -454,6 +472,19 @@ function App() {
                     No results found. Try a different search term.
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          
+          {/* Debug Info */}
+          {selectedTrack && (
+            <div className="fixed top-4 right-4 bg-blue-900 p-3 rounded text-sm z-50">
+              <div className="text-white font-bold">Debug:</div>
+              <div className="text-blue-200">
+                <div>SDK Ready: {sdkReady ? '✅' : '❌'}</div>
+                <div>Selected Track: {selectedTrack.name}</div>
+                <div>Track URI: {selectedTrack.uri}</div>
+                <div>Should Show Visualizer: {selectedTrack && sdkReady ? '✅' : '❌'}</div>
               </div>
             </div>
           )}
