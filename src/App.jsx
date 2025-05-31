@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useEffect, useState, Suspense, lazy } from 'react';
-import { loginWithSpotify, exchangeCodeForToken, getPlaylists, getPlaylistTracks, likeTrack, getRecommendations } from './utils/spotify';
+import { loginWithSpotify, exchangeCodeForToken, getPlaylists, getPlaylistTracks, likeTrack, getRecommendations, searchTracks } from './utils/spotify';
 
 const LazyVisualizer = lazy(() => import('./components/Visualizer'));
 
@@ -14,6 +14,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sdkReady, setSdkReady] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [currentView, setCurrentView] = useState('playlists'); // 'playlists', 'tracks', 'search'
 
   // Load Spotify Web Playback SDK
   useEffect(() => {
@@ -104,6 +107,26 @@ function App() {
     setSelectedPlaylist(null);
     setPlaylistTracks([]);
     setSelectedTrack(null);
+    setCurrentView('playlists');
+    setSearchResults([]);
+    setSearchQuery('');
+  };
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    try {
+      setLoading(true);
+      const results = await searchTracks(token, searchQuery.trim());
+      setSearchResults(results.tracks.items);
+      setCurrentView('search');
+    } catch (err) {
+      console.error('❌ Search failed:', err);
+      setError('Search failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLike = async (trackId) => {
@@ -166,16 +189,38 @@ function App() {
         <>
           <div className="text-green-400 mb-4">✅ Connected to Spotify!</div>
           
-          <button 
-            onClick={fetchPlaylists} 
-            className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded transition-colors"
-            disabled={loading}
-          >
-            {loading ? 'Loading...' : 'Load My Playlists'}
-          </button>
+          {/* Navigation and Search */}
+          <div className="w-full max-w-4xl flex flex-col sm:flex-row gap-4 mb-6">
+            <button 
+              onClick={fetchPlaylists} 
+              className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded transition-colors"
+              disabled={loading}
+            >
+              {loading && currentView === 'playlists' ? 'Loading...' : 'My Playlists'}
+            </button>
+            
+            {/* Search Form */}
+            <form onSubmit={handleSearch} className="flex-1 flex gap-2">
+              <input
+                type="text"
+                placeholder="Search for songs, artists, albums..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-3 py-2 bg-gray-800 text-white rounded border border-gray-600 focus:border-green-500 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={loading || !searchQuery.trim()}
+                className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 px-4 py-2 rounded transition-colors"
+              >
+                {loading && currentView === 'search' ? 'Searching...' : '🔍 Search'}
+              </button>
+            </form>
+          </div>
           
-          <div className="mt-4">
-            <label className="mr-2">Choose Visual:</label>
+          {/* Visual Type Selector */}
+          <div className="mb-6">
+            <label className="mr-2 text-white">Choose Visual:</label>
             <select
               className="text-black p-2 rounded"
               value={visualType}
@@ -187,10 +232,10 @@ function App() {
             </select>
           </div>
 
-          {/* Show playlists or tracks based on selection */}
-          {!selectedPlaylist ? (
+          {/* Content based on current view */}
+          {currentView === 'playlists' && (
             /* Playlists View */
-            <div className="w-full max-w-4xl mt-6">
+            <div className="w-full max-w-4xl">
               <h2 className="text-2xl font-bold mb-4">Your Playlists</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {playlists.map(playlist => (
@@ -207,7 +252,10 @@ function App() {
                     <div className="flex gap-2">
                       <button
                         className="bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm transition-colors"
-                        onClick={() => fetchPlaylistTracks(playlist.id, playlist.name)}
+                        onClick={() => {
+                          fetchPlaylistTracks(playlist.id, playlist.name);
+                          setCurrentView('tracks');
+                        }}
                       >
                         View Tracks
                       </button>
@@ -224,9 +272,11 @@ function App() {
                 ))}
               </div>
             </div>
-          ) : (
-            /* Tracks View */
-            <div className="w-full max-w-6xl mt-6">
+          )}
+
+          {currentView === 'tracks' && selectedPlaylist && (
+            /* Playlist Tracks View */
+            <div className="w-full max-w-6xl">
               <div className="flex items-center gap-4 mb-6">
                 <button
                   onClick={goBackToPlaylists}
@@ -250,6 +300,112 @@ function App() {
                       {track.album?.images && track.album.images[0] && (
                         <img 
                           src={track.album.images[0].url} 
+                          alt={track.album.name}
+                          className="w-12 h-12 rounded"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold truncate">{track.name}</h4>
+                        <p className="text-gray-400 text-sm truncate">
+                          {track.artists?.map(artist => artist.name).join(', ')} • {track.album?.name}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
+                          onClick={() => setSelectedTrack({ 
+                            id: track.id, 
+                            uri: track.uri, 
+                            name: track.name,
+                            artists: track.artists 
+                          })}
+                          disabled={!sdkReady}
+                        >
+                          {sdkReady ? 'Visualize' : 'Loading...'}
+                        </button>
+                        <a
+                          href={track.external_urls?.spotify}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm transition-colors"
+                        >
+                          Play in Spotify
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {currentView === 'search' && (
+            /* Search Results View */
+            <div className="w-full max-w-6xl">
+              <div className="flex items-center gap-4 mb-6">
+                <button
+                  onClick={goBackToPlaylists}
+                  className="bg-gray-600 hover:bg-gray-500 px-3 py-2 rounded transition-colors"
+                >
+                  ← Back to Playlists
+                </button>
+                <h2 className="text-2xl font-bold">Search Results for "{searchQuery}"</h2>
+              </div>
+              
+              <div className="space-y-2">
+                {searchResults.map((track, index) => (
+                  <div 
+                    key={track.id || index} 
+                    className="bg-gray-800 p-3 rounded flex items-center gap-4 hover:bg-gray-700 transition-colors"
+                  >
+                    {track.album?.images && track.album.images[0] && (
+                      <img 
+                        src={track.album.images[0].url} 
+                        alt={track.album.name}
+                        className="w-12 h-12 rounded"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold truncate">{track.name}</h4>
+                      <p className="text-gray-400 text-sm truncate">
+                        {track.artists?.map(artist => artist.name).join(', ')} • {track.album?.name}
+                      </p>
+                      <p className="text-gray-500 text-xs">
+                        {track.popularity}% popularity • {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
+                        onClick={() => setSelectedTrack({ 
+                          id: track.id, 
+                          uri: track.uri, 
+                          name: track.name,
+                          artists: track.artists 
+                        })}
+                        disabled={!sdkReady}
+                      >
+                        {sdkReady ? 'Visualize' : 'Loading...'}
+                      </button>
+                      <a
+                        href={track.external_urls?.spotify}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm transition-colors"
+                      >
+                        Play in Spotify
+                      </a>
+                    </div>
+                  </div>
+                ))}
+                {searchResults.length === 0 && !loading && (
+                  <div className="text-center py-8 text-gray-400">
+                    No results found. Try a different search term.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}          src={track.album.images[0].url} 
                           alt={track.album.name}
                           className="w-12 h-12 rounded"
                         />
