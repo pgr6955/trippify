@@ -13,13 +13,13 @@ export function loginWithSpotify() {
     'user-modify-playback-state'
   ];
 
-  const authUrl =
-    `https://accounts.spotify.com/authorize?response_type=token` +
-    `&client_id=${encodeURIComponent(clientId)}` +
-    `&scope=${encodeURIComponent(scopes.join(' '))}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  const authUrl = new URL('https://accounts.spotify.com/authorize');
+  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('response_type', 'token'); // ✅ this is the fix
+  authUrl.searchParams.set('scope', scopes.join(' '));
 
-  window.location = authUrl;
+  window.location.href = authUrl.toString();
 }
 
 export async function getPlaylists(token) {
