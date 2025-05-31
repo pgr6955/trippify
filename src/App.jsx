@@ -1,8 +1,6 @@
 // src/App.jsx
-import React, { useEffect, useState, Suspense, lazy } from 'react';
+import React, { useEffect, useState } from 'react';
 import { loginWithSpotify, exchangeCodeForToken, getPlaylists, getPlaylistTracks, likeTrack, getRecommendations, searchTracks } from './utils/spotify';
-
-const LazyVisualizer = lazy(() => import('./components/Visualizer'));
 
 function App() {
   const [token, setToken] = useState(null);
@@ -16,7 +14,7 @@ function App() {
   const [sdkReady, setSdkReady] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [currentView, setCurrentView] = useState('playlists'); // 'playlists', 'tracks', 'search'
+  const [currentView, setCurrentView] = useState('playlists');
 
   // Load Spotify Web Playback SDK
   useEffect(() => {
@@ -57,7 +55,6 @@ function App() {
           console.log('✅ Got access token!');
           setToken(accessToken);
           
-          // Clean up URL
           window.history.replaceState({}, document.title, window.location.pathname);
         } catch (err) {
           console.error('❌ Token exchange failed:', err);
@@ -130,36 +127,83 @@ function App() {
     }
   };
 
-  const handleLike = async (trackId) => {
-    try {
-      await likeTrack(token, trackId);
-      alert('Liked!');
-    } catch (err) {
-      console.error('❌ Failed to like track:', err);
-      alert('Failed to like track');
-    }
-  };
-
-  const handleRadio = async (trackId) => {
-    try {
-      const recs = await getRecommendations(token, trackId);
-      if (recs.tracks && recs.tracks.length > 0) {
-        window.open(recs.tracks[0].external_urls.spotify, '_blank');
-      } else {
-        alert('No recommendations found');
-      }
-    } catch (err) {
-      console.error('❌ Failed to get recommendations:', err);
-      alert('Failed to get recommendations');
-    }
-  };
-
   const visualOptions = [
     { value: 'bars', label: 'Audio Bars' },
     { value: 'spirals', label: 'Spirals' },
     { value: 'waveform', label: 'Waveform' },
     { value: '3d', label: '3D Trippy Mode' }
   ];
+
+  // Simple Visualizer Component (inline to avoid import issues)
+  const SimpleVisualizer = ({ trackUri, onClose }) => {
+    const canvasRef = React.useRef(null);
+    const animationRef = React.useRef(null);
+    
+    React.useEffect(() => {
+      console.log('🎵 Starting simple visualization...');
+      
+      if (!canvasRef.current) return;
+      
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      let time = 0;
+
+      const animate = () => {
+        animationRef.current = requestAnimationFrame(animate);
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const barCount = 64;
+        const barWidth = canvas.width / barCount;
+        
+        for (let i = 0; i < barCount; i++) {
+          const height = Math.sin(time * 0.02 + i * 0.3) * 100 + 150;
+          const hue = (i * 5 + time) % 360;
+          
+          ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+          ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 1, height);
+        }
+        
+        time += 1;
+      };
+
+      animate();
+      
+      return () => {
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+        }
+      };
+    }, []);
+
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        <div className="flex justify-between items-center p-4 bg-gray-900">
+          <h2 className="text-white text-xl">🎵 Music Visualizer</h2>
+          <button
+            onClick={onClose}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center p-4">
+          <canvas
+            ref={canvasRef}
+            width={800}
+            height={400}
+            className="border border-gray-600 rounded"
+          />
+        </div>
+
+        <div className="p-4 bg-gray-900 text-center">
+          <p className="text-white">Playing: {trackUri || 'No track'}</p>
+        </div>
+      </div>
+    );
+  };
 
   if (loading && !token) {
     return (
@@ -187,11 +231,10 @@ function App() {
           Login with Spotify
         </button>
       ) : (
-        <>
-          <div className="text-green-400 mb-4">✅ Connected to Spotify!</div>
+        <div className="w-full max-w-6xl">
+          <div className="text-green-400 mb-4 text-center">✅ Connected to Spotify!</div>
           
-          {/* Navigation and Search */}
-          <div className="w-full max-w-4xl flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <button 
               onClick={fetchPlaylists} 
               className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded transition-colors"
@@ -200,7 +243,6 @@ function App() {
               {loading && currentView === 'playlists' ? 'Loading...' : 'My Playlists'}
             </button>
             
-            {/* Search Form */}
             <form onSubmit={handleSearch} className="flex-1 flex gap-2">
               <input
                 type="text"
@@ -214,13 +256,12 @@ function App() {
                 disabled={loading || !searchQuery.trim()}
                 className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 px-4 py-2 rounded transition-colors"
               >
-                {loading && currentView === 'search' ? 'Searching...' : '🔍 Search'}
+                🔍 Search
               </button>
             </form>
           </div>
           
-          {/* Visual Type Selector */}
-          <div className="mb-6">
+          <div className="mb-6 text-center">
             <label className="mr-2 text-white">Choose Visual:</label>
             <select
               className="text-black p-2 rounded"
@@ -233,9 +274,8 @@ function App() {
             </select>
           </div>
 
-          {/* Content based on current view */}
           {currentView === 'playlists' && (
-            <div className="w-full max-w-4xl">
+            <div>
               <h2 className="text-2xl font-bold mb-4">Your Playlists</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {playlists.map(playlist => (
@@ -249,25 +289,15 @@ function App() {
                     )}
                     <h3 className="text-lg font-semibold mb-2 truncate">{playlist.name}</h3>
                     <p className="text-gray-400 text-sm mb-3">{playlist.tracks?.total || 0} tracks</p>
-                    <div className="flex gap-2">
-                      <button
-                        className="bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm transition-colors"
-                        onClick={() => {
-                          fetchPlaylistTracks(playlist.id, playlist.name);
-                          setCurrentView('tracks');
-                        }}
-                      >
-                        View Tracks
-                      </button>
-                      <a
-                        href={playlist.external_urls.spotify}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded text-sm transition-colors"
-                      >
-                        Open in Spotify
-                      </a>
-                    </div>
+                    <button
+                      className="bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm transition-colors w-full"
+                      onClick={() => {
+                        fetchPlaylistTracks(playlist.id, playlist.name);
+                        setCurrentView('tracks');
+                      }}
+                    >
+                      View Tracks
+                    </button>
                   </div>
                 ))}
               </div>
@@ -275,233 +305,122 @@ function App() {
           )}
 
           {currentView === 'tracks' && selectedPlaylist && (
-            <div className="w-full max-w-7xl">
+            <div>
               <div className="flex items-center gap-4 mb-6">
                 <button
                   onClick={goBackToPlaylists}
                   className="bg-gray-600 hover:bg-gray-500 px-3 py-2 rounded transition-colors"
                 >
-                  ← Back to Playlists
+                  ← Back
                 </button>
                 <h2 className="text-2xl font-bold">{selectedPlaylist.name}</h2>
               </div>
               
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-700">
-                    <tr>
-                      <th className="text-left p-3 w-12">#</th>
-                      <th className="text-left p-3 w-16">Cover</th>
-                      <th className="text-left p-3">Title</th>
-                      <th className="text-left p-3">Artist</th>
-                      <th className="text-left p-3">Album</th>
-                      <th className="text-left p-3 w-32">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {playlistTracks.map((item, index) => {
-                      const track = item.track;
-                      if (!track) return null;
-                      
-                      return (
-                        <tr 
-                          key={track.id || index} 
-                          className="border-t border-gray-700 hover:bg-gray-750 transition-colors"
-                        >
-                          <td className="p-3 text-gray-400">{index + 1}</td>
-                          <td className="p-3">
-                            {track.album?.images && track.album.images[0] && (
-                              <img 
-                                src={track.album.images[0].url} 
-                                alt={track.album.name}
-                                className="w-10 h-10 rounded object-cover"
-                              />
-                            )}
-                          </td>
-                          <td className="p-3">
-                            <div className="font-semibold text-white truncate max-w-xs">
-                              {track.name}
-                            </div>
-                          </td>
-                          <td className="p-3 text-gray-300 truncate max-w-xs">
-                            {track.artists?.map(artist => artist.name).join(', ')}
-                          </td>
-                          <td className="p-3 text-gray-400 truncate max-w-xs">
-                            {track.album?.name}
-                          </td>
-                          <td className="p-3">
-                            <div className="flex gap-1">
-                              <button
-                                className="bg-purple-500 hover:bg-purple-600 px-2 py-1 rounded text-xs transition-colors"
-                                onClick={() => {
-                                  console.log('🎨 Visualize button clicked for track:', track.name);
-                                  setSelectedTrack({ 
-                                    id: track.id, 
-                                    uri: track.uri, 
-                                    name: track.name,
-                                    artists: track.artists 
-                                  });
-                                  console.log('🎨 Selected track set:', { 
-                                    id: track.id, 
-                                    uri: track.uri, 
-                                    name: track.name,
-                                    artists: track.artists 
-                                  });
-                                }}
-                                disabled={!sdkReady}
-                                title="Visualize"
-                              >
-                                🎨
-                              </button>
-                              <a
-                                href={track.external_urls?.spotify}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="bg-green-600 hover:bg-green-500 px-2 py-1 rounded text-xs transition-colors"
-                                title="Play in Spotify"
-                              >
-                                ▶️
-                              </a>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="space-y-2">
+                {playlistTracks.map((item, index) => {
+                  const track = item.track;
+                  if (!track) return null;
+                  
+                  return (
+                    <div 
+                      key={track.id || index} 
+                      className="bg-gray-800 p-3 rounded flex items-center gap-4 hover:bg-gray-700 transition-colors"
+                    >
+                      {track.album?.images && track.album.images[0] && (
+                        <img 
+                          src={track.album.images[0].url} 
+                          alt={track.album.name}
+                          className="w-12 h-12 rounded object-cover"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-white truncate">{track.name}</h4>
+                        <p className="text-gray-400 text-sm truncate">
+                          {track.artists?.map(artist => artist.name).join(', ')}
+                        </p>
+                      </div>
+                      <button
+                        className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
+                        onClick={() => {
+                          console.log('🎨 Visualize clicked for:', track.name);
+                          setSelectedTrack({ 
+                            id: track.id, 
+                            uri: track.uri, 
+                            name: track.name,
+                            artists: track.artists 
+                          });
+                        }}
+                      >
+                        🎨 Visualize
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
           {currentView === 'search' && (
-            <div className="w-full max-w-7xl">
+            <div>
               <div className="flex items-center gap-4 mb-6">
                 <button
                   onClick={goBackToPlaylists}
                   className="bg-gray-600 hover:bg-gray-500 px-3 py-2 rounded transition-colors"
                 >
-                  ← Back to Playlists
+                  ← Back
                 </button>
-                <h2 className="text-2xl font-bold">Search Results for "{searchQuery}"</h2>
+                <h2 className="text-2xl font-bold">Search Results</h2>
               </div>
               
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-700">
-                    <tr>
-                      <th className="text-left p-3 w-12">#</th>
-                      <th className="text-left p-3 w-16">Cover</th>
-                      <th className="text-left p-3">Title</th>
-                      <th className="text-left p-3">Artist</th>
-                      <th className="text-left p-3">Album</th>
-                      <th className="text-left p-3 w-20">Duration</th>
-                      <th className="text-left p-3 w-32">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {searchResults.map((track, index) => (
-                      <tr 
-                        key={track.id || index} 
-                        className="border-t border-gray-700 hover:bg-gray-750 transition-colors"
-                      >
-                        <td className="p-3 text-gray-400">{index + 1}</td>
-                        <td className="p-3">
-                          {track.album?.images && track.album.images[0] && (
-                            <img 
-                              src={track.album.images[0].url} 
-                              alt={track.album.name}
-                              className="w-10 h-10 rounded object-cover"
-                            />
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="font-semibold text-white truncate max-w-xs">
-                            {track.name}
-                          </div>
-                        </td>
-                        <td className="p-3 text-gray-300 truncate max-w-xs">
-                          {track.artists?.map(artist => artist.name).join(', ')}
-                        </td>
-                        <td className="p-3 text-gray-400 truncate max-w-xs">
-                          {track.album?.name}
-                        </td>
-                        <td className="p-3 text-gray-400 text-sm">
-                          {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex gap-1">
-                            <button
-                              className="bg-purple-500 hover:bg-purple-600 px-2 py-1 rounded text-xs transition-colors"
-                              onClick={() => {
-                                console.log('🎨 Search Visualize button clicked for track:', track.name);
-                                setSelectedTrack({ 
-                                  id: track.id, 
-                                  uri: track.uri, 
-                                  name: track.name,
-                                  artists: track.artists 
-                                });
-                                console.log('🎨 Search Selected track set:', { 
-                                  id: track.id, 
-                                  uri: track.uri, 
-                                  name: track.name,
-                                  artists: track.artists 
-                                });
-                              }}
-                              disabled={!sdkReady}
-                              title="Visualize"
-                            >
-                              🎨
-                            </button>
-                            <a
-                              href={track.external_urls?.spotify}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="bg-green-600 hover:bg-green-500 px-2 py-1 rounded text-xs transition-colors"
-                              title="Play in Spotify"
-                            >
-                              ▶️
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {searchResults.length === 0 && !loading && (
-                  <div className="text-center py-8 text-gray-400">
-                    No results found. Try a different search term.
+              <div className="space-y-2">
+                {searchResults.map((track, index) => (
+                  <div 
+                    key={track.id || index} 
+                    className="bg-gray-800 p-3 rounded flex items-center gap-4 hover:bg-gray-700 transition-colors"
+                  >
+                    {track.album?.images && track.album.images[0] && (
+                      <img 
+                        src={track.album.images[0].url} 
+                        alt={track.album.name}
+                        className="w-12 h-12 rounded object-cover"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-white truncate">{track.name}</h4>
+                      <p className="text-gray-400 text-sm truncate">
+                        {track.artists?.map(artist => artist.name).join(', ')}
+                      </p>
+                    </div>
+                    <button
+                      className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
+                      onClick={() => {
+                        console.log('🎨 Search Visualize clicked for:', track.name);
+                        setSelectedTrack({ 
+                          id: track.id, 
+                          uri: track.uri, 
+                          name: track.name,
+                          artists: track.artists 
+                        });
+                      }}
+                    >
+                      🎨 Visualize
+                    </button>
                   </div>
-                )}
+                ))}
               </div>
             </div>
           )}
           
-          {/* Debug Info */}
           {selectedTrack && (
-            <div className="fixed top-4 right-4 bg-blue-900 p-3 rounded text-sm z-50">
-              <div className="text-white font-bold">Debug:</div>
-              <div className="text-blue-200">
-                <div>SDK Ready: {sdkReady ? '✅' : '❌'}</div>
-                <div>Selected Track: {selectedTrack.name}</div>
-                <div>Track URI: {selectedTrack.uri}</div>
-                <div>Should Show Visualizer: {selectedTrack && sdkReady ? '✅' : '❌'}</div>
-              </div>
-            </div>
-          )}
-          
-          {selectedTrack && sdkReady && (
-            <LazyVisualizer 
-              trackId={selectedTrack.id} 
+            <SimpleVisualizer 
               trackUri={selectedTrack.uri}
-              visualType={visualType} 
-              token={token} 
               onClose={() => {
                 console.log('🎨 Closing visualizer');
                 setSelectedTrack(null);
               }}
             />
           )}
-        </>
+        </div>
       )}
     </div>
   );
