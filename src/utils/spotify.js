@@ -265,3 +265,36 @@ export async function resumePlayback(token) {
     throw new Error(`Failed to resume: ${res.status}`);
   }
 }
+
+export async function setVolume(token, volumePercent) {
+  const res = await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${volumePercent}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+  });
+
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Failed to set volume: ${res.status}`);
+  }
+}
+
+export async function searchTracks(token, query, limit = 20) {
+  const params = new URLSearchParams({
+    q: query,
+    type: 'track',
+    limit: limit
+  });
+
+  const res = await fetch(`https://api.spotify.com/v1/search?${params.toString()}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to search tracks: ${res.status}`);
+  }
+
+  return res.json();
+}
