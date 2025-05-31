@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { initializePlayer, playTrack, pausePlayback, resumePlayback, setVolume } from '../utils/spotify';
 
-const Visualizer = ({ trackId, trackUri, visualType, token }) => {
+const Visualizer = ({ trackId, trackUri, visualType, token, onClose }) => {
   console.log('🎵 Visualizer component props:', { trackId, trackUri, visualType, token: !!token });
   
   const canvasRef = useRef(null);
@@ -297,10 +297,10 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 bg-gray-900 rounded">
-        <div className="text-white">
-          <div>Loading Spotify Player...</div>
-          <div className="text-sm text-gray-400 mt-2">
+      <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="text-xl mb-2">Loading Spotify Player...</div>
+          <div className="text-sm text-gray-400">
             Make sure you have Spotify Premium and the Web Playback SDK is enabled
           </div>
         </div>
@@ -310,9 +310,9 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 bg-red-900 rounded p-4">
-        <div className="text-white text-center">
-          <div className="font-bold mb-2">Error: {error}</div>
+      <div className="fixed inset-0 bg-red-900 z-50 flex flex-col items-center justify-center p-4">
+        <div className="text-white text-center max-w-md">
+          <div className="font-bold mb-4 text-xl">Error: {error}</div>
           <div className="text-sm text-red-200">
             Common issues:
             <ul className="list-disc list-inside mt-2 text-left">
@@ -328,7 +328,15 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black flex flex-col">
+    <div className="fixed inset-0 bg-black flex flex-col z-50">
+      {/* Close Button */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded z-10"
+      >
+        ✕ Close Visualizer
+      </button>
+
       {/* Main Visualization Area */}
       <div className="flex-1 flex items-center justify-center p-4">
         <canvas
