@@ -2,9 +2,7 @@
 
 export function loginWithSpotify() {
   const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
-  // Dynamic redirect URI based on environment
-  const redirectUri = import.meta.env.VITE_REDIRECT_URI || window.location.origin + '/';
-  
+  const redirectUri = import.meta.env.VITE_REDIRECT_URI;
   const scopes = [
     'user-read-private',
     'user-read-email',
@@ -15,15 +13,18 @@ export function loginWithSpotify() {
     'user-modify-playback-state'
   ];
 
-  const authUrl = new URL('https://accounts.spotify.com/authorize');
-  authUrl.searchParams.set('client_id', clientId);
-  authUrl.searchParams.set('redirect_uri', redirectUri);
-  authUrl.searchParams.set('response_type', 'token'); // ✅ important!
-  authUrl.searchParams.set('scope', scopes.join(' '));
+  // Use URLSearchParams for more reliable URL building
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'token',
+    scope: scopes.join(' ')
+  });
 
-  console.log('Redirecting to:', authUrl.toString()); // 🔍 use this to debug
-
-  window.location.href = authUrl.toString();
+  const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
+  
+  console.log('Redirecting to:', authUrl);
+  window.location.href = authUrl;
 }
 
 export async function getPlaylists(token) {
