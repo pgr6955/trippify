@@ -81,6 +81,7 @@ function App() {
       setLoading(true);
       const data = await getPlaylists(token);
       setPlaylists(data.items);
+      setCurrentView('playlists');
     } catch (err) {
       console.error('❌ Failed to fetch playlists:', err);
       setError('Failed to load playlists');
@@ -160,7 +161,7 @@ function App() {
     { value: '3d', label: '3D Trippy Mode' }
   ];
 
-  if (loading) {
+  if (loading && !token) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
         <div className="text-xl">Loading...</div>
@@ -234,7 +235,6 @@ function App() {
 
           {/* Content based on current view */}
           {currentView === 'playlists' && (
-            /* Playlists View */
             <div className="w-full max-w-4xl">
               <h2 className="text-2xl font-bold mb-4">Your Playlists</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -275,7 +275,6 @@ function App() {
           )}
 
           {currentView === 'tracks' && selectedPlaylist && (
-            /* Playlist Tracks View */
             <div className="w-full max-w-6xl">
               <div className="flex items-center gap-4 mb-6">
                 <button
@@ -340,7 +339,6 @@ function App() {
           )}
 
           {currentView === 'search' && (
-            /* Search Results View */
             <div className="w-full max-w-6xl">
               <div className="flex items-center gap-4 mb-6">
                 <button
@@ -405,44 +403,6 @@ function App() {
                 )}
               </div>
             </div>
-          )}          src={track.album.images[0].url} 
-                          alt={track.album.name}
-                          className="w-12 h-12 rounded"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold truncate">{track.name}</h4>
-                        <p className="text-gray-400 text-sm truncate">
-                          {track.artists?.map(artist => artist.name).join(', ')} • {track.album?.name}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded text-sm transition-colors"
-                          onClick={() => setSelectedTrack({ 
-                            id: track.id, 
-                            uri: track.uri, 
-                            name: track.name,
-                            artists: track.artists 
-                          })}
-                          disabled={!sdkReady}
-                        >
-                          {sdkReady ? 'Visualize' : 'Loading...'}
-                        </button>
-                        <a
-                          href={track.external_urls?.spotify}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm transition-colors"
-                        >
-                          Play in Spotify
-                        </a>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           )}
           
           {selectedTrack && sdkReady && (
@@ -471,7 +431,6 @@ function App() {
               </div>
             </div>
           )}
-        </>
         </>
       )}
     </div>
