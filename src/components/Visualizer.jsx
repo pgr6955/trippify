@@ -1,6 +1,6 @@
 // src/components/Visualizer.jsx
 import React, { useEffect, useRef, useState } from 'react';
-import { initializePlayer, playTrack, pausePlayback, resumePlayback } from '../utils/spotify';
+import { initializePlayer, playTrack, pausePlayback, resumePlayback, setVolume } from '../utils/spotify';
 
 const Visualizer = ({ trackId, trackUri, visualType, token }) => {
   const canvasRef = useRef(null);
@@ -14,6 +14,7 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentTrack, setCurrentTrack] = useState(null);
+  const [volume, setVolumeState] = useState(50);
 
   useEffect(() => {
     let mounted = true;
@@ -93,6 +94,18 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
     } catch (err) {
       console.error('Playback error:', err);
       setError(err.message);
+    }
+  };
+
+  const handleVolumeChange = async (newVolume) => {
+    try {
+      setVolumeState(newVolume);
+      if (playerRef.current) {
+        await playerRef.current.setVolume(newVolume / 100);
+      }
+      await setVolume(token, newVolume);
+    } catch (err) {
+      console.error('Volume change error:', err);
     }
   };
 
@@ -247,27 +260,45 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
 
   return (
     <div className="bg-black p-4 rounded">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-white">
+      <div className="mb-4 flex items-center justify-between flex-wrap gap-4">
+        <div className="text-white flex-1 min-w-0">
           {currentTrack && (
             <div>
-              <h3 className="font-bold">{currentTrack.name}</h3>
-              <p className="text-gray-400">
+              <h3 className="font-bold truncate">{currentTrack.name}</h3>
+              <p className="text-gray-400 truncate">
                 {currentTrack.artists.map(artist => artist.name).join(', ')}
               </p>
             </div>
           )}
         </div>
-        <button
-          onClick={handlePlayPause}
-          className={`px-6 py-2 rounded font-semibold ${
-            isPlaying 
-              ? 'bg-red-500 hover:bg-red-600' 
-              : 'bg-green-500 hover:bg-green-600'
-          } text-white transition-colors`}
-        >
-          {isPlaying ? '⏸ Pause' : '▶ Play'}
-        </button>
+        
+        <div className="flex items-center gap-4">
+          {/* Volume Control */}
+          <div className="flex items-center gap-2 text-white">
+            <span className="text-sm">🔊</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={volume}
+              onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+              className="w-20 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+            />
+            <span className="text-sm w-8">{volume}%</span>
+          </div>
+          
+          {/* Play/Pause Button */}
+          <button
+            onClick={handlePlayPause}
+            className={`px-6 py-2 rounded font-semibold ${
+              isPlaying 
+                ? 'bg-red-500 hover:bg-red-600' 
+                : 'bg-green-500 hover:bg-green-600'
+            } text-white transition-colors`}
+          >
+            {isPlaying ? '⏸ Pause' : '▶ Play'}
+          </button>
+        </div>
       </div>
       
       <canvas
@@ -276,6 +307,33 @@ const Visualizer = ({ trackId, trackUri, visualType, token }) => {
         height={400}
         className="w-full h-96 bg-black border border-gray-700 rounded"
       />
+      
+      <style jsx>{`
+        .slider::-webkit-slider-thumb {
+          appearance: none;
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          background: #1db954;
+          cursor: pointer;
+          box-shadow: 0 0 2px 0 #555;
+          transition: background .15s ease-in-out;
+        }
+        
+        .slider::-webkit-slider-thumb:hover {
+          background: #1ed760;
+        }
+        
+        .slider::-moz-range-thumb {
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: #1db954;
+          cursor: pointer;
+          border: none;
+          box-shadow: 0 0 2px 0 #555;
+        }
+      `}</style>
     </div>
   );
 };
