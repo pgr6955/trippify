@@ -155,3 +155,113 @@ export async function getRecommendations(token, trackId) {
   
   return res.json();
 }
+
+// Web Playback SDK functions
+export function initializePlayer(token, onReady, onPlayerStateChanged) {
+  return new Promise((resolve, reject) => {
+    if (!window.Spotify) {
+      reject(new Error('Spotify Web Playback SDK not loaded'));
+      return;
+    }
+
+    const player = new window.Spotify.Player({
+      name: 'Trippify Player',
+      getOAuthToken: cb => { cb(token); },
+      volume: 0.5
+    });
+
+    // Error handling
+    player.addListener('initialization_error', ({ message }) => {
+      console.error('Failed to initialize:', message);
+      reject(new Error(message));
+    });
+
+    player.addListener('authentication_error', ({ message }) => {
+      console.error('Failed to authenticate:', message);
+      reject(new Error(message));
+    });
+
+    player.addListener('account_error', ({ message }) => {
+      console.error('Failed to validate Spotify account:', message);
+      reject(new Error(message));
+    });
+
+    player.addListener('playback_error', ({ message }) => {
+      console.error('Failed to perform playback:', message);
+    });
+
+    // Playback status updates
+    player.addListener('player_state_changed', state => {
+      console.log('Player state changed:', state);
+      if (onPlayerStateChanged) {
+        onPlayerStateChanged(state);
+      }
+    });
+
+    // Ready
+    player.addListener('ready', ({ device_id }) => {
+      console.log('Ready with Device ID', device_id);
+      if (onReady) {
+        onReady(device_id);
+      }
+      resolve({ player, device_id });
+    });
+
+    // Not Ready
+    player.addListener('not_ready', ({ device_id }) => {
+      console.log('Device ID has gone offline', device_id);
+    });
+
+    // Connect to the player!
+    player.connect().then(success => {
+      if (success) {
+        console.log('Successfully connected to Spotify!');
+      } else {
+        reject(new Error('Failed to connect to Spotify'));
+      }
+    });
+  });
+}
+
+export async function playTrack(token, deviceId, trackUri) {
+  const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      uris: [trackUri]
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to play track: ${res.status}`);
+  }
+}
+
+export async function pausePlayback(token) {
+  const res = await fetch('https://api.spotify.com/v1/me/player/pause', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+  });
+
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Failed to pause: ${res.status}`);
+  }
+}
+
+export async function resumePlayback(token) {
+  const res = await fetch('https://api.spotify.com/v1/me/player/play', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+  });
+
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Failed to resume: ${res.status}`);
+  }
+}
