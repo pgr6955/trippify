@@ -1,509 +1,457 @@
-// src/App.jsx
-import React, { useEffect, useState } from 'react';
-import { loginWithSpotify, exchangeCodeForToken, getPlaylists, getPlaylistTracks, likeTrack, getRecommendations, searchTracks } from './utils/spotify';
-import Visualizer from './components/Visualizer';
+// src/components/Visualizer.jsx
+import React, { useEffect, useRef, useState } from 'react';
+import { initializePlayer, playTrack, pausePlayback, resumePlayback, setVolume } from '../utils/spotify';
 
-function App() {
-  const [token, setToken] = useState(null);
-  const [playlists, setPlaylists] = useState([]);
-  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
-  const [playlistTracks, setPlaylistTracks] = useState([]);
-  const [selectedTrack, setSelectedTrack] = useState(null);
-  const [visualType, setVisualType] = useState('bars');
-  const [loading, setLoading] = useState(false);
+const Visualizer = ({ trackId, trackUri, visualType, token, onClose }) => {
+  console.log('🎵 Visualizer component rendering with props:', { trackId, trackUri, visualType, token: !!token });
+  
+  const canvasRef = useRef(null);
+  const playerRef = useRef(null);
+  const deviceIdRef = useRef(null);
+  const animationRef = useRef(null);
+  
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sdkReady, setSdkReady] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [currentView, setCurrentView] = useState('playlists'); // 'playlists', 'tracks', 'search'
-
-  // Load Spotify Web Playback SDK
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://sdk.scdn.co/spotify-player.js";
-    script.async = true;
-    
-    document.body.appendChild(script);
-
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      console.log('✅ Spotify Web Playback SDK is ready');
-      setSdkReady(true);
-    };
-
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
+  const [currentTrack, setCurrentTrack] = useState(null);
+  const [volume, setVolumeState] = useState(50);
+  const [playerReady, setPlayerReady] = useState(false);
 
   useEffect(() => {
-    const handleCallback = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      const error = urlParams.get('error');
-      
-      if (error) {
-        console.error('❌ Spotify auth error:', error);
-        setError(`Authentication failed: ${error}`);
-        return;
-      }
-      
-      if (code) {
-        console.log('✅ Got authorization code, exchanging for token...');
-        setLoading(true);
+    let mounted = true;
+    console.log('🎵 Visualizer useEffect starting...');
+
+    const setupPlayer = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        console.log('🎵 Setting up Spotify player...');
+
+        // Check if Spotify SDK is available
+        if (!window.Spotify) {
+          throw new Error('Spotify Web Playback SDK not loaded. Make sure you have Spotify Premium.');
+        }
+
+        console.log('✅ Spotify SDK found, initializing player...');
+
+        // Initialize Spotify Player
+        const { player, device_id } = await initializePlayer(
+          token,
+          (deviceId) => {
+            console.log('✅ Player ready with device ID:', deviceId);
+            deviceIdRef.current = deviceId;
+            setPlayerReady(true);
+          },
+          (state) => {
+            if (!mounted) return;
+            
+            console.log('🎵 Player state changed:', state);
+            if (state) {
+              setIsPlaying(!state.paused);
+              setCurrentTrack(state.track_window.current_track);
+              console.log('🎵 Current track:', state.track_window.current_track);
+            }
+          }
+        );
+
+        if (!mounted) return;
+
+        playerRef.current = player;
+        console.log('✅ Player setup complete');
         
-        try {
-          const accessToken = await exchangeCodeForToken(code);
-          console.log('✅ Got access token!');
-          setToken(accessToken);
-          
-          // Clean up URL
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } catch (err) {
-          console.error('❌ Token exchange failed:', err);
-          setError('Failed to get access token');
-        } finally {
-          setLoading(false);
+        setIsLoading(false);
+      } catch (err) {
+        console.error('❌ Failed to setup player:', err);
+        if (mounted) {
+          setError(err.message);
+          setIsLoading(false);
         }
       }
     };
 
-    handleCallback();
-  }, []);
+    setupPlayer();
 
-  const handleLogin = () => {
-    setError(null);
-    loginWithSpotify();
-  };
+    return () => {
+      mounted = false;
+      console.log('🎵 Cleaning up Visualizer component...');
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (playerRef.current) {
+        playerRef.current.disconnect();
+      }
+    };
+  }, [token]);
 
-  const fetchPlaylists = async () => {
-    try {
-      setLoading(true);
-      const data = await getPlaylists(token);
-      setPlaylists(data.items);
-      setCurrentView('playlists');
-    } catch (err) {
-      console.error('❌ Failed to fetch playlists:', err);
-      setError('Failed to load playlists');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchPlaylistTracks = async (playlistId, playlistName) => {
-    try {
-      setLoading(true);
-      const data = await getPlaylistTracks(token, playlistId);
-      setPlaylistTracks(data.items);
-      setSelectedPlaylist({ id: playlistId, name: playlistName });
-    } catch (err) {
-      console.error('❌ Failed to fetch playlist tracks:', err);
-      setError('Failed to load playlist tracks');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const goBackToPlaylists = () => {
-    setSelectedPlaylist(null);
-    setPlaylistTracks([]);
-    setSelectedTrack(null);
-    setCurrentView('playlists');
-    setSearchResults([]);
-    setSearchQuery('');
-  };
-
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
+  const handlePlayPause = async () => {
+    console.log('🎵 Play/Pause clicked');
+    console.log('🎵 Player ready:', playerReady);
+    console.log('🎵 Device ID:', deviceIdRef.current);
+    console.log('🎵 Track URI:', trackUri);
+    console.log('🎵 Is playing:', isPlaying);
 
     try {
-      setLoading(true);
-      const results = await searchTracks(token, searchQuery.trim());
-      setSearchResults(results.tracks.items);
-      setCurrentView('search');
-    } catch (err) {
-      console.error('❌ Search failed:', err);
-      setError('Search failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (!playerReady || !deviceIdRef.current) {
+        throw new Error('Player not ready yet. Please wait...');
+      }
 
-  const handleLike = async (trackId) => {
-    try {
-      await likeTrack(token, trackId);
-      alert('Liked!');
-    } catch (err) {
-      console.error('❌ Failed to like track:', err);
-      alert('Failed to like track');
-    }
-  };
-
-  const handleRadio = async (trackId) => {
-    try {
-      const recs = await getRecommendations(token, trackId);
-      if (recs.tracks && recs.tracks.length > 0) {
-        window.open(recs.tracks[0].external_urls.spotify, '_blank');
+      if (isPlaying) {
+        console.log('🎵 Pausing playback...');
+        await pausePlayback(token);
       } else {
-        alert('No recommendations found');
+        if (trackUri) {
+          console.log('🎵 Playing track:', trackUri);
+          await playTrack(token, deviceIdRef.current, trackUri);
+          
+          // Start visualization after a short delay
+          setTimeout(() => {
+            console.log('🎵 Starting visualization...');
+            startVisualization();
+          }, 1000);
+        } else {
+          console.log('🎵 Resuming playback...');
+          await resumePlayback(token);
+          startVisualization();
+        }
       }
     } catch (err) {
-      console.error('❌ Failed to get recommendations:', err);
-      alert('Failed to get recommendations');
+      console.error('❌ Playback error:', err);
+      setError(err.message);
     }
   };
 
-  const visualOptions = [
-    { value: 'bars', label: 'Audio Bars' },
-    { value: 'spirals', label: 'Spirals' },
-    { value: 'waveform', label: 'Waveform' },
-    { value: '3d', label: '3D Trippy Mode' }
-  ];
+  const handleVolumeChange = async (newVolume) => {
+    try {
+      setVolumeState(newVolume);
+      if (playerRef.current) {
+        await playerRef.current.setVolume(newVolume / 100);
+      }
+      await setVolume(token, newVolume);
+    } catch (err) {
+      console.error('Volume change error:', err);
+    }
+  };
 
-  if (loading && !token) {
+  const startVisualization = () => {
+    console.log('🎨 Starting visualization...');
+    
+    if (!canvasRef.current) {
+      console.error('❌ Missing canvas');
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    // Create a more realistic audio simulation
+    let time = 0;
+    
+    console.log('🎨 Visualization setup complete, starting animation loop');
+
+    const draw = () => {
+      if (!isPlaying) {
+        console.log('🎨 Not playing, stopping animation');
+        return;
+      }
+
+      animationRef.current = requestAnimationFrame(draw);
+      
+      // Simulate audio data with more realistic patterns
+      const bufferLength = 128;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      // Create bass-heavy audio simulation
+      for (let i = 0; i < bufferLength; i++) {
+        const frequency = i / bufferLength;
+        const bassBoost = frequency < 0.1 ? 3 : 1;
+        const midBoost = frequency > 0.1 && frequency < 0.6 ? 1.5 : 1;
+        const trebleBoost = frequency > 0.8 ? 1.2 : 1;
+        
+        dataArray[i] = Math.max(0, Math.min(255, 
+          (Math.sin(time * 0.01 + i * 0.1) * 60 + 80) * bassBoost * midBoost * trebleBoost +
+          Math.random() * 40
+        ));
+      }
+      
+      time += 1;
+      
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      switch (visualType) {
+        case 'bars':
+          drawBars(ctx, dataArray, canvas.width, canvas.height);
+          break;
+        case 'spirals':
+          drawSpirals(ctx, dataArray, canvas.width, canvas.height);
+          break;
+        case 'waveform':
+          drawWaveform(ctx, dataArray, canvas.width, canvas.height);
+          break;
+        case '3d':
+          draw3D(ctx, dataArray, canvas.width, canvas.height);
+          break;
+        default:
+          drawBars(ctx, dataArray, canvas.width, canvas.height);
+      }
+    };
+
+    draw();
+  };
+
+  const drawBars = (ctx, dataArray, width, height) => {
+    const barWidth = (width / dataArray.length) * 2.5;
+    let barHeight;
+    let x = 0;
+
+    for (let i = 0; i < dataArray.length; i++) {
+      barHeight = (dataArray[i] / 255) * height;
+      
+      const r = barHeight + 25 * (i / dataArray.length);
+      const g = 250 * (i / dataArray.length);
+      const b = 50;
+      
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+      
+      x += barWidth + 1;
+    }
+  };
+
+  const drawSpirals = (ctx, dataArray, width, height) => {
+    const centerX = width / 2;
+    const centerY = height / 2;
+    
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    
+    for (let i = 0; i < dataArray.length; i++) {
+      const angle = (i / dataArray.length) * Math.PI * 2;
+      const radius = (dataArray[i] / 255) * 200;
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY + Math.sin(angle) * radius;
+      
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    
+    ctx.stroke();
+  };
+
+  const drawWaveform = (ctx, dataArray, width, height) => {
+    ctx.strokeStyle = '#ff0080';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    
+    const sliceWidth = width / dataArray.length;
+    let x = 0;
+    
+    for (let i = 0; i < dataArray.length; i++) {
+      const v = dataArray[i] / 128.0;
+      const y = v * height / 2;
+      
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+      
+      x += sliceWidth;
+    }
+    
+    ctx.stroke();
+  };
+
+  const draw3D = (ctx, dataArray, width, height) => {
+    const centerX = width / 2;
+    const centerY = height / 2;
+    
+    for (let i = 0; i < dataArray.length; i++) {
+      const angle = (i / dataArray.length) * Math.PI * 2;
+      const radius = (dataArray[i] / 255) * 150;
+      
+      const x1 = centerX + Math.cos(angle) * radius;
+      const y1 = centerY + Math.sin(angle) * radius;
+      const x2 = centerX + Math.cos(angle + 0.1) * radius * 1.5;
+      const y2 = centerY + Math.sin(angle + 0.1) * radius * 1.5;
+      
+      const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+      gradient.addColorStop(0, `hsl(${(i / dataArray.length) * 360}, 100%, 50%)`);
+      gradient.addColorStop(1, `hsl(${(i / dataArray.length) * 360}, 100%, 20%)`);
+      
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  };
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
-        <div className="text-xl">Loading...</div>
+      <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="text-xl mb-2">Loading Spotify Player...</div>
+          <div className="text-sm text-gray-400">
+            Make sure you have Spotify Premium and the Web Playback SDK is enabled
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="fixed inset-0 bg-red-900 z-50 flex flex-col items-center justify-center p-4">
+        <div className="text-white text-center max-w-md">
+          <div className="font-bold mb-4 text-xl">Error: {error}</div>
+          <div className="text-sm text-red-200 mb-4">
+            Common issues:
+            <ul className="list-disc list-inside mt-2 text-left">
+              <li>Spotify Premium required for Web Playback</li>
+              <li>Make sure no other Spotify instances are playing</li>
+              <li>Try refreshing the page</li>
+              <li>Check browser console for more details</li>
+            </ul>
+          </div>
+          <button
+            onClick={onClose}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+          >
+            Close
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center p-4">
-      <h1 className="text-3xl font-bold mb-4">Trippy Spotify Visualizer</h1>
-      
-      {error && (
-        <div className="bg-red-600 text-white p-3 rounded mb-4 max-w-md text-center">
-          {error}
-        </div>
-      )}
-      
-      {!token ? (
-        <button 
-          onClick={handleLogin} 
-          className="bg-green-500 hover:bg-green-600 px-6 py-3 rounded-lg font-semibold transition-colors"
-        >
-          Login with Spotify
-        </button>
-      ) : (
-        <>
-          <div className="text-green-400 mb-4">✅ Connected to Spotify!</div>
-          
-          {/* Navigation and Search */}
-          <div className="w-full max-w-4xl flex flex-col sm:flex-row gap-4 mb-6">
-            <button 
-              onClick={fetchPlaylists} 
-              className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded transition-colors"
-              disabled={loading}
-            >
-              {loading && currentView === 'playlists' ? 'Loading...' : 'My Playlists'}
-            </button>
-            
-            {/* Search Form */}
-            <form onSubmit={handleSearch} className="flex-1 flex gap-2">
-              <input
-                type="text"
-                placeholder="Search for songs, artists, albums..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 px-3 py-2 bg-gray-800 text-white rounded border border-gray-600 focus:border-green-500 focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={loading || !searchQuery.trim()}
-                className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 px-4 py-2 rounded transition-colors"
-              >
-                {loading && currentView === 'search' ? 'Searching...' : '🔍 Search'}
-              </button>
-            </form>
-          </div>
-          
-          {/* Visual Type Selector */}
-          <div className="mb-6">
-            <label className="mr-2 text-white">Choose Visual:</label>
-            <select
-              className="text-black p-2 rounded"
-              value={visualType}
-              onChange={(e) => setVisualType(e.target.value)}
-            >
-              {visualOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
+    <div className="fixed inset-0 bg-black flex flex-col z-50">
+      {/* Close Button */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded z-10"
+      >
+        ✕ Close Visualizer
+      </button>
 
-          {/* Content based on current view */}
-          {currentView === 'playlists' && (
-            <div className="w-full max-w-4xl">
-              <h2 className="text-2xl font-bold mb-4">Your Playlists</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {playlists.map(playlist => (
-                  <div key={playlist.id} className="bg-gray-800 p-4 rounded hover:bg-gray-700 transition-colors">
-                    {playlist.images && playlist.images[0] && (
-                      <img 
-                        src={playlist.images[0].url} 
-                        alt={playlist.name}
-                        className="w-full h-32 object-cover rounded mb-3"
-                      />
-                    )}
-                    <h3 className="text-lg font-semibold mb-2 truncate">{playlist.name}</h3>
-                    <p className="text-gray-400 text-sm mb-3">{playlist.tracks?.total || 0} tracks</p>
-                    <div className="flex gap-2">
-                      <button
-                        className="bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm transition-colors"
-                        onClick={() => {
-                          fetchPlaylistTracks(playlist.id, playlist.name);
-                          setCurrentView('tracks');
-                        }}
-                      >
-                        View Tracks
-                      </button>
-                      <a
-                        href={playlist.external_urls.spotify}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded text-sm transition-colors"
-                      >
-                        Open in Spotify
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+      {/* Main Visualization Area */}
+      <div className="flex-1 flex items-center justify-center p-4">
+        <canvas
+          ref={canvasRef}
+          width={1200}
+          height={600}
+          className="max-w-full max-h-full border border-gray-700 rounded-lg"
+          style={{ width: '100%', height: 'auto', maxHeight: '70vh' }}
+        />
+      </div>
 
-          {currentView === 'tracks' && selectedPlaylist && (
-            <div className="w-full max-w-7xl">
-              <div className="flex items-center gap-4 mb-6">
-                <button
-                  onClick={goBackToPlaylists}
-                  className="bg-gray-600 hover:bg-gray-500 px-3 py-2 rounded transition-colors"
-                >
-                  ← Back to Playlists
-                </button>
-                <h2 className="text-2xl font-bold">{selectedPlaylist.name}</h2>
-              </div>
-              
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-700">
-                    <tr>
-                      <th className="text-left p-3 w-12">#</th>
-                      <th className="text-left p-3 w-16">Cover</th>
-                      <th className="text-left p-3">Title</th>
-                      <th className="text-left p-3">Artist</th>
-                      <th className="text-left p-3">Album</th>
-                      <th className="text-left p-3 w-32">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {playlistTracks.map((item, index) => {
-                      const track = item.track;
-                      if (!track) return null;
-                      
-                      return (
-                        <tr 
-                          key={track.id || index} 
-                          className="border-t border-gray-700 hover:bg-gray-750 transition-colors"
-                        >
-                          <td className="p-3 text-gray-400">{index + 1}</td>
-                          <td className="p-3">
-                            {track.album?.images && track.album.images[0] && (
-                              <img 
-                                src={track.album.images[0].url} 
-                                alt={track.album.name}
-                                className="w-10 h-10 rounded object-cover"
-                              />
-                            )}
-                          </td>
-                          <td className="p-3">
-                            <div className="font-semibold text-white truncate max-w-xs">
-                              {track.name}
-                            </div>
-                          </td>
-                          <td className="p-3 text-gray-300 truncate max-w-xs">
-                            {track.artists?.map(artist => artist.name).join(', ')}
-                          </td>
-                          <td className="p-3 text-gray-400 truncate max-w-xs">
-                            {track.album?.name}
-                          </td>
-                          <td className="p-3">
-                            <div className="flex gap-1">
-                              <button
-                                className="bg-purple-500 hover:bg-purple-600 px-2 py-1 rounded text-xs transition-colors"
-                                onClick={() => {
-                                  console.log('🎨 Visualize button clicked for track:', track.name);
-                                  setSelectedTrack({ 
-                                    id: track.id, 
-                                    uri: track.uri, 
-                                    name: track.name,
-                                    artists: track.artists 
-                                  });
-                                  console.log('🎨 Selected track set:', { 
-                                    id: track.id, 
-                                    uri: track.uri, 
-                                    name: track.name,
-                                    artists: track.artists 
-                                  });
-                                }}
-                                disabled={!sdkReady}
-                                title="Visualize"
-                              >
-                                🎨
-                              </button>
-                              <a
-                                href={track.external_urls?.spotify}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="bg-green-600 hover:bg-green-500 px-2 py-1 rounded text-xs transition-colors"
-                                title="Play in Spotify"
-                              >
-                                ▶️
-                              </a>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {currentView === 'search' && (
-            <div className="w-full max-w-7xl">
-              <div className="flex items-center gap-4 mb-6">
-                <button
-                  onClick={goBackToPlaylists}
-                  className="bg-gray-600 hover:bg-gray-500 px-3 py-2 rounded transition-colors"
-                >
-                  ← Back to Playlists
-                </button>
-                <h2 className="text-2xl font-bold">Search Results for "{searchQuery}"</h2>
-              </div>
-              
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-700">
-                    <tr>
-                      <th className="text-left p-3 w-12">#</th>
-                      <th className="text-left p-3 w-16">Cover</th>
-                      <th className="text-left p-3">Title</th>
-                      <th className="text-left p-3">Artist</th>
-                      <th className="text-left p-3">Album</th>
-                      <th className="text-left p-3 w-20">Duration</th>
-                      <th className="text-left p-3 w-32">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {searchResults.map((track, index) => (
-                      <tr 
-                        key={track.id || index} 
-                        className="border-t border-gray-700 hover:bg-gray-750 transition-colors"
-                      >
-                        <td className="p-3 text-gray-400">{index + 1}</td>
-                        <td className="p-3">
-                          {track.album?.images && track.album.images[0] && (
-                            <img 
-                              src={track.album.images[0].url} 
-                              alt={track.album.name}
-                              className="w-10 h-10 rounded object-cover"
-                            />
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="font-semibold text-white truncate max-w-xs">
-                            {track.name}
-                          </div>
-                        </td>
-                        <td className="p-3 text-gray-300 truncate max-w-xs">
-                          {track.artists?.map(artist => artist.name).join(', ')}
-                        </td>
-                        <td className="p-3 text-gray-400 truncate max-w-xs">
-                          {track.album?.name}
-                        </td>
-                        <td className="p-3 text-gray-400 text-sm">
-                          {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex gap-1">
-                            <button
-                              className="bg-purple-500 hover:bg-purple-600 px-2 py-1 rounded text-xs transition-colors"
-                              onClick={() => {
-                                console.log('🎨 Search Visualize button clicked for track:', track.name);
-                                setSelectedTrack({ 
-                                  id: track.id, 
-                                  uri: track.uri, 
-                                  name: track.name,
-                                  artists: track.artists 
-                                });
-                                console.log('🎨 Search Selected track set:', { 
-                                  id: track.id, 
-                                  uri: track.uri, 
-                                  name: track.name,
-                                  artists: track.artists 
-                                });
-                              }}
-                              disabled={!sdkReady}
-                              title="Visualize"
-                            >
-                              🎨
-                            </button>
-                            <a
-                              href={track.external_urls?.spotify}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="bg-green-600 hover:bg-green-500 px-2 py-1 rounded text-xs transition-colors"
-                              title="Play in Spotify"
-                            >
-                              ▶️
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {searchResults.length === 0 && !loading && (
-                  <div className="text-center py-8 text-gray-400">
-                    No results found. Try a different search term.
-                  </div>
+      {/* Bottom Controls Bar */}
+      <div className="bg-gray-900 border-t border-gray-700 p-4">
+        <div className="max-w-6xl mx-auto">
+          {/* Track Info */}
+          <div className="flex items-center gap-4 mb-4">
+            {currentTrack && (
+              <>
+                {currentTrack.album?.images?.[0] && (
+                  <img 
+                    src={currentTrack.album.images[0].url} 
+                    alt={currentTrack.album.name}
+                    className="w-16 h-16 rounded"
+                  />
                 )}
-              </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-white truncate">{currentTrack.name}</h3>
+                  <p className="text-gray-400 truncate">
+                    {currentTrack.artists.map(artist => artist.name).join(', ')}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Playback Controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* Play/Pause Button */}
+              <button
+                onClick={handlePlayPause}
+                disabled={!playerReady}
+                className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-semibold ${
+                  !playerReady
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : isPlaying 
+                    ? 'bg-red-500 hover:bg-red-600' 
+                    : 'bg-green-500 hover:bg-green-600'
+                } text-white transition-colors`}
+              >
+                {!playerReady ? '...' : isPlaying ? '⏸' : '▶'}
+              </button>
+
+              {/* Visual Type Selector */}
+              <select
+                value={visualType}
+                onChange={(e) => setVisualType(e.target.value)}
+                className="bg-gray-800 text-white px-3 py-2 rounded border border-gray-600"
+              >
+                <option value="bars">Audio Bars</option>
+                <option value="spirals">Spirals</option>
+                <option value="waveform">Waveform</option>
+                <option value="3d">3D Trippy</option>
+              </select>
             </div>
-          )}
-          
-          {/* Debug Info */}
-          {selectedTrack && (
-            <div className="fixed top-4 right-4 bg-blue-900 p-3 rounded text-sm z-50">
-              <div className="text-white font-bold">Debug:</div>
-              <div className="text-blue-200">
-                <div>SDK Ready: {sdkReady ? '✅' : '❌'}</div>
-                <div>Selected Track: {selectedTrack.name}</div>
-                <div>Track URI: {selectedTrack.uri}</div>
-                <div>Should Show Visualizer: {selectedTrack && sdkReady ? '✅' : '❌'}</div>
-              </div>
+
+            {/* Volume Control */}
+            <div className="flex items-center gap-3">
+              <span className="text-white text-sm">🔊</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                className="w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+              />
+              <span className="text-white text-sm w-10">{volume}%</span>
             </div>
-          )}
-          
-          {selectedTrack && sdkReady && (
-            <Visualizer 
-              trackId={selectedTrack.id} 
-              trackUri={selectedTrack.uri}
-              visualType={visualType} 
-              token={token} 
-              onClose={() => {
-                console.log('🎨 Closing visualizer');
-                setSelectedTrack(null);
-              }}
-            />
-          )}
-        </>
-      )}
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .slider::-webkit-slider-thumb {
+          appearance: none;
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          background: #1db954;
+          cursor: pointer;
+          box-shadow: 0 0 2px 0 #555;
+          transition: background .15s ease-in-out;
+        }
+        
+        .slider::-webkit-slider-thumb:hover {
+          background: #1ed760;
+        }
+        
+        .slider::-moz-range-thumb {
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: #1db954;
+          cursor: pointer;
+          border: none;
+          box-shadow: 0 0 2px 0 #555;
+        }
+      `}</style>
     </div>
   );
-}
+};
 
-export default App;
+export default Visualizer;
